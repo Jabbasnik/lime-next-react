@@ -2,7 +2,7 @@ import type { Web3Provider } from "@ethersproject/providers";
 import { useWeb3React } from "@web3-react/core";
 import { useEffect, useState } from "react";
 import useUSElectionContract from "../hooks/useUSElectionContract";
-import CircularProgress from "./CircularProgress";
+import TransactionProgress from "./CircularProgress";
 
 type USContract = {
   contractAddress: string;
@@ -22,11 +22,14 @@ const USLibrary = ({ contractAddress }: USContract) => {
   const [votesBiden, setVotesBiden] = useState<number | undefined>();
   const [votesTrump, setVotesTrump] = useState<number | undefined>();
   const [stateSeats, setStateSeats] = useState<number | undefined>();
-  const [activeState, setActiveState] = useState<boolean>(false);
-  const [transactionHash, setTransactionHash] = useState<string | undefined>('');
+  const [inProgressState, setInProgressState] = useState<boolean>(false);
+  const [transactionHash, setTransactionHash] = useState<string>("");
+  const [trumpSeats, setTrumpSeats] = useState<number>();
+  const [bidenSeats, setBidenSeats] = useState<number>();
 
   useEffect(() => {
     getCurrentLeader();
+    getCurrentSeats();
   }, []);
 
   const getCurrentLeader = async () => {
@@ -38,6 +41,13 @@ const USLibrary = ({ contractAddress }: USContract) => {
         ? "Biden"
         : "Trump"
     );
+  };
+
+  const getCurrentSeats = async () => {
+    const currentBidenSeats = await usElectionContract.seats(1);
+    const currentTrumpSeats = await usElectionContract.seats(2);
+    setBidenSeats(currentBidenSeats);
+    setTrumpSeats(currentTrumpSeats);
   };
 
   const stateInput = (input) => {
@@ -57,13 +67,13 @@ const USLibrary = ({ contractAddress }: USContract) => {
   };
 
   const submitStateResults = async () => {
-    setActiveState(true);
+    setInProgressState(true);
     const result: any = [name, votesBiden, votesTrump, stateSeats];
     const tx = await usElectionContract.submitStateResult(result);
     setTransactionHash(tx.hash);
     await tx.wait();
-    setActiveState(false);
-    setTransactionHash('');
+    setInProgressState(false);
+    setTransactionHash("");
     resetForm();
   };
 
@@ -74,26 +84,36 @@ const USLibrary = ({ contractAddress }: USContract) => {
     setStateSeats(0);
   };
 
+  usElectionContract.on("LogStateResult", (winner, stateSeats, state, tx) => {
+    winner === 1
+      ? setBidenSeats(bidenSeats + stateSeats)
+      : setTrumpSeats(trumpSeats + stateSeats);
+    trumpSeats > bidenSeats
+      ? setCurrentLeader("Trump")
+      : setCurrentLeader("Biden");
+    alert(
+      `${
+        winner === 1 ? `Biden` : `Trump`
+      } won the ${state} with ${stateSeats} seats`
+    );
+  });
+
   return (
     <div className="results-form">
       <p>Current Leader is: {currentLeader}</p>
+      <p>Biden seats count: {bidenSeats}</p>
+      <p>Trump seats count: {trumpSeats}</p>
       <form>
         <label>
           State:
-          <input
-            onChange={stateInput}
-            value={name}
-            disabled={activeState}
-            type="text"
-            name="state"
-          />
+          <input onChange={stateInput} value={name} type="text" name="state" />
         </label>
         <label>
           BIDEN Votes:
           <input
             onChange={bideVotesInput}
             value={votesBiden}
-            disabled={activeState}
+            disabled={inProgressState}
             type="number"
             name="biden_votes"
           />
@@ -103,7 +123,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
           <input
             onChange={trumpVotesInput}
             value={votesTrump}
-            disabled={activeState}
+            disabled={inProgressState}
             type="number"
             name="trump_votes"
           />
@@ -113,7 +133,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
           <input
             onChange={seatsInput}
             value={stateSeats}
-            disabled={activeState}
+            disabled={inProgressState}
             type="number"
             name="seats"
           />
@@ -121,12 +141,16 @@ const USLibrary = ({ contractAddress }: USContract) => {
         {/* <input type="submit" value="Submit" /> */}
       </form>
       <div className="button-wrapper">
-        <button onClick={submitStateResults} disabled={activeState}>
+        <button onClick={submitStateResults} disabled={inProgressState}>
           Submit Results
         </button>
       </div>
       <div className="submit-progress">
-        {activeState ? <CircularProgress transactionHash={transactionHash}/> : resetForm}
+        {inProgressState ? (
+          <TransactionProgress transactionHash={transactionHash} />
+        ) : (
+          resetForm
+        )}
       </div>
       <style jsx>{`
         .results-form {
