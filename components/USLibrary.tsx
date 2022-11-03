@@ -2,7 +2,7 @@ import type { Web3Provider } from "@ethersproject/providers";
 import { useWeb3React } from "@web3-react/core";
 import { useEffect, useState } from "react";
 import useUSElectionContract from "../hooks/useUSElectionContract";
-import toastr from 'toastr'
+import toastr from "toastr";
 import TransactionProgress from "./CircularProgress";
 
 type USContract = {
@@ -90,7 +90,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
       setInProgressState(false);
       setTransactionHash("");
       resetForm();
-      toastr.success('Results submitted');
+      toastr.success("Results submitted");
     } catch (exc) {
       toastr.error(
         "There was an error during state result submission: " + exc.message
@@ -108,7 +108,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
         await tx.wait();
         setInProgressState(false);
         setTransactionHash("");
-        toastr.success('Elecetion ended');
+        toastr.success("Elecetion ended");
       } catch (exc) {
         toastr.error(
           "There was an error during ending the election: " + exc.message
@@ -135,7 +135,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
     trumpSeats > bidenSeats
       ? setCurrentLeader("Trump")
       : setCurrentLeader("Biden");
-    console.log(
+    toastr.info(
       `${
         winner === 1 ? `Biden` : `Trump`
       } won the ${state} with ${stateSeats} seats`
@@ -144,7 +144,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
 
   usElectionContract.on("LogElectionEnded", (winner) => {
     setElectionStatus(ELECTION_ENDED);
-    console.log(`The winner is: ${winner === 1 ? "Biden" : "Trump"}`);
+    toastr.info(`The winner is: ${winner === 1 ? "Biden" : "Trump"}`);
   });
 
   return (
