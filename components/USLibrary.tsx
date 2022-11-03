@@ -23,6 +23,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
   const [votesTrump, setVotesTrump] = useState<number | undefined>();
   const [stateSeats, setStateSeats] = useState<number | undefined>();
   const [activeState, setActiveState] = useState<boolean>(false);
+  const [transactionHash, setTransactionHash] = useState<string | undefined>('');
 
   useEffect(() => {
     getCurrentLeader();
@@ -59,8 +60,10 @@ const USLibrary = ({ contractAddress }: USContract) => {
     setActiveState(true);
     const result: any = [name, votesBiden, votesTrump, stateSeats];
     const tx = await usElectionContract.submitStateResult(result);
+    setTransactionHash(tx.hash);
     await tx.wait();
     setActiveState(false);
+    setTransactionHash('');
     resetForm();
   };
 
@@ -123,7 +126,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
         </button>
       </div>
       <div className="submit-progress">
-        {activeState ? <CircularProgress /> : resetForm}
+        {activeState ? <CircularProgress transactionHash={transactionHash}/> : resetForm}
       </div>
       <style jsx>{`
         .results-form {
