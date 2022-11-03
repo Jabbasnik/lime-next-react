@@ -2,6 +2,7 @@ import type { Web3Provider } from "@ethersproject/providers";
 import { useWeb3React } from "@web3-react/core";
 import { useEffect, useState } from "react";
 import useUSElectionContract from "../hooks/useUSElectionContract";
+import toastr from 'toastr'
 import TransactionProgress from "./CircularProgress";
 
 type USContract = {
@@ -13,6 +14,9 @@ export enum Leader {
   BIDEN,
   TRUMP,
 }
+
+const ELECTION_IN_PROGRESS = "ongoing";
+const ELECTION_ENDED = "finished";
 
 const USLibrary = ({ contractAddress }: USContract) => {
   const { account, library } = useWeb3React<Web3Provider>();
@@ -26,10 +30,13 @@ const USLibrary = ({ contractAddress }: USContract) => {
   const [transactionHash, setTransactionHash] = useState<string>("");
   const [trumpSeats, setTrumpSeats] = useState<number>();
   const [bidenSeats, setBidenSeats] = useState<number>();
+  const [electionStatus, setElectionStatus] =
+    useState<string>(ELECTION_IN_PROGRESS);
 
   useEffect(() => {
     getCurrentLeader();
     getCurrentSeats();
+    getElectionStatus();
   }, []);
 
   const getCurrentLeader = async () => {
@@ -50,6 +57,13 @@ const USLibrary = ({ contractAddress }: USContract) => {
     setTrumpSeats(currentTrumpSeats);
   };
 
+  const getElectionStatus = async () => {
+    const currentElectionStatus = await usElectionContract.electionEnded();
+    setElectionStatus(
+      currentElectionStatus ? ELECTION_ENDED : ELECTION_IN_PROGRESS
+    );
+  };
+
   const stateInput = (input) => {
     setName(input.target.value);
   };
@@ -67,14 +81,44 @@ const USLibrary = ({ contractAddress }: USContract) => {
   };
 
   const submitStateResults = async () => {
-    setInProgressState(true);
-    const result: any = [name, votesBiden, votesTrump, stateSeats];
-    const tx = await usElectionContract.submitStateResult(result);
-    setTransactionHash(tx.hash);
-    await tx.wait();
-    setInProgressState(false);
-    setTransactionHash("");
-    resetForm();
+    try {
+      setInProgressState(true);
+      const result: any = [name, votesBiden, votesTrump, stateSeats];
+      const tx = await usElectionContract.submitStateResult(result);
+      setTransactionHash(tx.hash);
+      await tx.wait();
+      setInProgressState(false);
+      setTransactionHash("");
+      resetForm();
+      toastr.success('Results submitted');
+    } catch (exc) {
+      toastr.error(
+        "There was an error during state result submission: " + exc.message
+      );
+      setInProgressState(false);
+    }
+  };
+
+  const endElection = async () => {
+    if (electionStatus === ELECTION_IN_PROGRESS) {
+      try {
+        setInProgressState(true);
+        const tx = await usElectionContract.endElection();
+        setTransactionHash(tx.hash);
+        await tx.wait();
+        setInProgressState(false);
+        setTransactionHash("");
+        toastr.success('Elecetion ended');
+      } catch (exc) {
+        toastr.error(
+          "There was an error during ending the election: " + exc.message
+        );
+        setInProgressState(false);
+      }
+    } else {
+      toastr.error("Election already finished!");
+      setInProgressState(false);
+    }
   };
 
   const resetForm = async () => {
@@ -91,11 +135,16 @@ const USLibrary = ({ contractAddress }: USContract) => {
     trumpSeats > bidenSeats
       ? setCurrentLeader("Trump")
       : setCurrentLeader("Biden");
-    alert(
+    console.log(
       `${
         winner === 1 ? `Biden` : `Trump`
       } won the ${state} with ${stateSeats} seats`
     );
+  });
+
+  usElectionContract.on("LogElectionEnded", (winner) => {
+    setElectionStatus(ELECTION_ENDED);
+    console.log(`The winner is: ${winner === 1 ? "Biden" : "Trump"}`);
   });
 
   return (
@@ -103,10 +152,17 @@ const USLibrary = ({ contractAddress }: USContract) => {
       <p>Current Leader is: {currentLeader}</p>
       <p>Biden seats count: {bidenSeats}</p>
       <p>Trump seats count: {trumpSeats}</p>
+      <p>Current election status: {electionStatus}</p>
       <form>
         <label>
           State:
-          <input onChange={stateInput} value={name} type="text" name="state" />
+          <input
+            onChange={stateInput}
+            value={name}
+            disabled={inProgressState}
+            type="text"
+            name="state"
+          />
         </label>
         <label>
           BIDEN Votes:
@@ -143,6 +199,11 @@ const USLibrary = ({ contractAddress }: USContract) => {
       <div className="button-wrapper">
         <button onClick={submitStateResults} disabled={inProgressState}>
           Submit Results
+        </button>
+      </div>
+      <div className="button-wrapper">
+        <button onClick={endElection} disabled={inProgressState}>
+          End election
         </button>
       </div>
       <div className="submit-progress">

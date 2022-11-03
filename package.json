@@ -28,7 +28,9 @@
     "react": "17.0.2",
     "react-dom": "17.0.2",
     "react-promise-tracker": "^2.1.0",
-    "swr": "^1.0.1"
+    "react-toastr": "^3.0.0",
+    "swr": "^1.0.1",
+    "toastr": "^2.1.4"
   },
   "devDependencies": {
     "@typechain/ethers-v5": "^8.0.1",
