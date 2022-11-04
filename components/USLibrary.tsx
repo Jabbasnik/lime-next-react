@@ -30,14 +30,44 @@ const USLibrary = ({ contractAddress }: USContract) => {
   const [transactionHash, setTransactionHash] = useState<string>("");
   const [trumpSeats, setTrumpSeats] = useState<number>();
   const [bidenSeats, setBidenSeats] = useState<number>();
-  const [electionStatus, setElectionStatus] =
-    useState<string>(ELECTION_IN_PROGRESS);
+  const [electionStatus, setElectionStatus] = useState<string>(ELECTION_IN_PROGRESS);
 
   useEffect(() => {
-    getCurrentLeader();
-    getCurrentSeats();
-    getElectionStatus();
-  }, []);
+    const onLogStateResult = (winner, stateSeats, state, tx) => {
+      winner === 1
+        ? setBidenSeats(bidenSeats + stateSeats)
+        : setTrumpSeats(trumpSeats + stateSeats);
+      trumpSeats > bidenSeats
+        ? setCurrentLeader("Trump")
+        : setCurrentLeader("Biden");
+      toastr.info(
+        `${
+          winner === 1 ? `Biden` : `Trump`
+        } won the ${state} with ${stateSeats} seats`
+      );
+    }
+    
+    const onLogElectionEnded = (winner) => {
+      setElectionStatus(ELECTION_ENDED);
+      toastr.info(`The winner is: ${winner === 1 ? "Biden" : "Trump"}`);
+    }
+
+    if (!!usElectionContract) {
+      getCurrentLeader();
+      getCurrentSeats();
+      getElectionStatus();
+
+      usElectionContract.on("LogStateResult", onLogStateResult);
+      usElectionContract.on("LogElectionEnded", onLogElectionEnded);
+    }
+
+    return () => {
+      if (!!usElectionContract?.off) {
+        usElectionContract.off("LogStateResult", onLogStateResult);
+        usElectionContract.off("LogElectionEnded", onLogStateResult);
+      }
+    }
+  }, [usElectionContract]);
 
   const getCurrentLeader = async () => {
     const currentLeader = await usElectionContract.currentLeader();
@@ -88,8 +118,8 @@ const USLibrary = ({ contractAddress }: USContract) => {
       setTransactionHash(tx.hash);
       await tx.wait();
       setInProgressState(false);
-      setTransactionHash("");
       resetForm();
+      setTransactionHash("");
       toastr.success("Results submitted");
     } catch (exc) {
       toastr.error(
@@ -107,6 +137,7 @@ const USLibrary = ({ contractAddress }: USContract) => {
         setTransactionHash(tx.hash);
         await tx.wait();
         setInProgressState(false);
+        resetForm();
         setTransactionHash("");
         toastr.success("Elecetion ended");
       } catch (exc) {
@@ -127,25 +158,6 @@ const USLibrary = ({ contractAddress }: USContract) => {
     setVotesTrump(0);
     setStateSeats(0);
   };
-
-  usElectionContract.on("LogStateResult", (winner, stateSeats, state, tx) => {
-    winner === 1
-      ? setBidenSeats(bidenSeats + stateSeats)
-      : setTrumpSeats(trumpSeats + stateSeats);
-    trumpSeats > bidenSeats
-      ? setCurrentLeader("Trump")
-      : setCurrentLeader("Biden");
-    toastr.info(
-      `${
-        winner === 1 ? `Biden` : `Trump`
-      } won the ${state} with ${stateSeats} seats`
-    );
-  });
-
-  usElectionContract.on("LogElectionEnded", (winner) => {
-    setElectionStatus(ELECTION_ENDED);
-    toastr.info(`The winner is: ${winner === 1 ? "Biden" : "Trump"}`);
-  });
 
   return (
     <div className="results-form">
@@ -207,10 +219,8 @@ const USLibrary = ({ contractAddress }: USContract) => {
         </button>
       </div>
       <div className="submit-progress">
-        {inProgressState ? (
+        {inProgressState && (
           <TransactionProgress transactionHash={transactionHash} />
-        ) : (
-          resetForm
         )}
       </div>
       <style jsx>{`
